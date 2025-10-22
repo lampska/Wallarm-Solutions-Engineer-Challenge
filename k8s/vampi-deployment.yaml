@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vampi-deployment
+  namespace: vampi-app
+  labels:
+    app: vampi
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: vampi
+  template:
+    metadata:
+      labels:
+        app: vampi
+    spec:
+      containers:
+        - name: vampi
+          # upstream repo: https://github.com/erev0s/VAmPI
+          image: erev0s/vampi:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20

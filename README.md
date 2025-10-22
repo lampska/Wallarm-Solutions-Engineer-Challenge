@@ -1,86 +1,211 @@
-# Wallarm Solutions Engineer Technical Evaluation
+# Wallarm solution engineer challenge - solution
 
-## 📌 Overview
+### Dependencies and files
 
-Welcome to the **Wallarm Solutions Engineer Technical Evaluation**. This exercise is designed to assess your ability to deploy and configure Wallarm's filtering nodes using a deployment method of your choice, troubleshoot any issues encountered, and document your process effectively. Additionally, we will evaluate your ability to leverage our official documentation to complete the task.
+Environment Setup:
+- docker, kubernetes (k8s), helm, nginx k8s ingress controller
+- https://github.com/erev0s/VAmPI
 
----
+Files:
 
-## 🎯 Objectives
+- `troubleshooting.md` - Detailed troubleshooting of encountered issues
+- `k8s/vampi-namespace.yaml` - k8s namespace for the app (`vampi-app`).
+- `k8s/vampi-deployment.yaml` - k8s deployment for the VAmPI container.
+- `k8s/vampi-service.yaml` - k8s clusterIP Service exposing the pod port.
+- `k8s/vampi-ingress.yaml` - k8s nginx ingress resource
 
-By the end of this evaluation, you should be able to:
+# Detailed walkthru
 
-✅ Deploy a Wallarm filtering node using a supported method of your choice.  
-✅ Configure a backend origin to receive test traffic. (httpbin.org is also acceptable)  
-✅ Use the **GoTestWAF** attack simulation tool to generate traffic.  
-✅ Document the deployment and troubleshooting process.  
-✅ Demonstrate proficiency in using **Wallarm's official documentation**.  
+## Environment setup
 
----
+### MacOS
 
-## 📂 Prerequisites
+- Install Docker Desktop for Mac https://docs.docker.com/desktop/setup/install/mac-install/
+- Enable single node kubernetes cluster in Docker Desktop
+- Install homebrew https://brew.sh/
+- Install helm: ```brew install helm```
 
-Before you begin, ensure you have access to:
 
-- A **cloud or desktop environment** that supports one of Wallarm’s [deployment methods](https://docs.wallarm.com/installation/supported-deployment-options/) (**Kubernetes, Docker, VM, etc.**).
-- A **backend application** or API endpoint to receive test traffic.
-- **GoTestWAF**: [GitHub Repository](https://github.com/wallarm/gotestwaf)
-- **Wallarm official documentation**: [Documentation Portal](https://docs.wallarm.com/)
+Verification & version information
 
----
+```bash
+helm version
 
-## 🚀 Task Breakdown
+version.BuildInfo{Version:"v3.19.0", GitCommit:"3d8990f0836691f0229297773f3524598f46bda6", GitTreeState:"clean", GoVersion:"go1.25.1"}
 
-### 1️⃣ Deploy a Wallarm Filtering Node
+docker -v
 
-🔹 Choose a [deployment method](https://docs.wallarm.com/installation/supported-deployment-options/) (**e.g., Docker, Kubernetes, AWS, etc.**).  
-🔹 Follow the [**official Wallarm documentation**](https://docs.wallarm.com/) to install and configure the filtering node.  
-🔹 Verify that the filtering node is properly deployed and running.  
+Docker version 28.5.1, build e180ab8
 
-### 2️⃣ Set Up a Backend Origin
+kubetcl version
 
-🔹 Configure a simple **backend API or web application** to receive traffic.  
-🔹 Ensure the backend is **reachable from the filtering node**.  
+Client Version: v1.34.1
+Kustomize Version: v5.7.1
+Server Version: v1.34.1
 
-### 3️⃣ Generate Traffic Using GoTestWAF
+kubectl get all -A
 
-🔹 Install and configure **GoTestWAF**.  
-🔹 Send attack simulation traffic through the **Wallarm filtering node**.  
-🔹 Analyze the results and confirm that attacks are being detected.  
+NAMESPACE     NAME                                         READY   STATUS    RESTARTS   AGE
+kube-system   pod/coredns-66bc5c9577-fl25c                 1/1     Running   0          13m
+kube-system   pod/coredns-66bc5c9577-gx6gm                 1/1     Running   0          13m
+kube-system   pod/etcd-docker-desktop                      1/1     Running   0          13m
+kube-system   pod/kube-apiserver-docker-desktop            1/1     Running   0          13m
+kube-system   pod/kube-controller-manager-docker-desktop   1/1     Running   0          13m
+kube-system   pod/kube-proxy-62m8x                         1/1     Running   0          13m
+kube-system   pod/kube-scheduler-docker-desktop            1/1     Running   0          13m
+kube-system   pod/storage-provisioner                      1/1     Running   0          13m
+kube-system   pod/vpnkit-controller                        1/1     Running   0          13m
 
-### 4️⃣ Document Your Process
+NAMESPACE     NAME                 TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)                  AGE
+default       service/kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP                  13m
+kube-system   service/kube-dns     ClusterIP   10.96.0.10   <none>        53/UDP,53/TCP,9153/TCP   13m
 
-📝 Provide an **overview summary** of your deployment and why you chose it.  
-🛠️ Document any **issues encountered and how you resolved them**.  
-📸 Include **relevant logs, screenshots, or outputs** where applicable.  
+NAMESPACE     NAME                        DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR            AGE
+kube-system   daemonset.apps/kube-proxy   1         1         1       1            1           kubernetes.io/os=linux   13m
 
----
+NAMESPACE     NAME                      READY   UP-TO-DATE   AVAILABLE   AGE
+kube-system   deployment.apps/coredns   2/2     2            2           13m
 
-## ✅ Evaluation Criteria
+NAMESPACE     NAME                                 DESIRED   CURRENT   READY   AGE
+kube-system   replicaset.apps/coredns-66bc5c9577   2         2         2       13m
 
-Your submission will be evaluated based on:
 
-📌 **Completeness**: Were all required tasks completed?  
-📌 **Clarity**: Is the documentation clear and well-structured?  
-📌 **Troubleshooting**: How well did you document and resolve any issues?  
-📌 **Understanding of the Product**: Did you correctly set up and use the Wallarm filtering node?  
-📌 **Use of Official Documentation**: Did you successfully leverage Wallarm's official resources?  
+```
 
----
+### Windows WSL / Ubuntu 24
 
-## 📬 Submission
+FIXME: Ubuntu 24 WSL setup
 
-Once you have completed the evaluation, submit the following:
+### nginx-ingress controller
 
-📂 Fork this **GitHub repo** and use it as the repository for your documentation, configuration files, and any relevant logs or screenshots.  
-📜 A **README file** summarizing your process and key findings.  
-📜 A **HIGH Level Diargram** that illustrates what you built and how traffic is flowing.  
+Install an nginx-ingress controller (example using Helm):
 
----
+```bash
+# Add repo
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
 
-## ℹ️ Additional Notes
+# Install into namespace ingress-nginx
+helm install ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx --create-namespace
+```
 
-💡 You are encouraged to **ask questions and leverage Wallarm's documentation**.  
-📖 The ability to **document your troubleshooting steps** is just as important as the final deployment.  
+Verification -- please note nginx 404 error code is expected at this phase
 
-🚀 **Good luck, and we look forward to your submission!** 🎉
+```bash
+kubectl get service --namespace ingress-nginx
+NAME                                 TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                      AGE
+ingress-nginx-controller             LoadBalancer   10.99.146.215    localhost     80:31993/TCP,443:30535/TCP   119s
+ingress-nginx-controller-admission   ClusterIP      10.102.154.113   <none>        443/TCP                      119s
+
+curl -v http://localhost:80
+
+* Host localhost:80 was resolved.
+* IPv6: ::1
+* IPv4: 127.0.0.1
+*   Trying [::1]:80...
+* Connected to localhost (::1) port 80
+> GET / HTTP/1.1
+> Host: localhost
+> User-Agent: curl/8.7.1
+> Accept: */*
+> 
+* Request completely sent off
+< HTTP/1.1 404 Not Found
+< Date: Wed, 22 Oct 2025 02:13:56 GMT
+< Content-Type: text/html
+< Content-Length: 146
+< Connection: keep-alive
+< 
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<center><h1>404 Not Found</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+```
+
+### Target API app (VAmPI) and routing
+
+For plain docker instructions, please refer to https://github.com/erev0s/VAmPI
+
+This will deploy VAmPI and nginx ingress rules to kubernetes namespace vampi-app
+
+```bash
+kubectl apply -f k8s/vampi-namespace.yaml
+kubectl apply -f k8s/vampi-deployment.yaml
+kubectl apply -f k8s/vampi-service.yaml
+kubectl apply -f k8s/vampi-ingress.yaml
+```
+
+Verification (NOTE troubleshooting ISSUE #1)
+
+```bash
+kubectl get all -n vampi-app
+kubectl get svc -n ingress-nginx
+kubectl describe ingress -n vampi-app
+
+
+NAME                                    READY   STATUS    RESTARTS   AGE
+pod/vampi-deployment-77f96fff48-7qq9m   1/1     Running   0          7m23s
+pod/vampi-deployment-77f96fff48-shpx6   1/1     Running   0          7m10s
+
+NAME                    TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)   AGE
+service/vampi-service   ClusterIP   10.104.46.79   <none>        80/TCP    20m
+
+NAME                               READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/vampi-deployment   2/2     2            2           20m
+
+NAME                                          DESIRED   CURRENT   READY   AGE
+replicaset.apps/vampi-deployment-77f96fff48   2         2         2       7m23s
+replicaset.apps/vampi-deployment-f7975f895    0         0         0       20m
+NAME                                 TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                      AGE
+ingress-nginx-controller             LoadBalancer   10.99.146.215    localhost     80:31993/TCP,443:30535/TCP   42m
+ingress-nginx-controller-admission   ClusterIP      10.102.154.113   <none>        443/TCP                      42m
+Name:             vampi-ingress
+Labels:           <none>
+Namespace:        vampi-app
+Address:          localhost
+Ingress Class:    nginx
+Default backend:  <default>
+Rules:
+  Host        Path  Backends
+  ----        ----  --------
+  localhost   
+              /   vampi-service:80 (10.1.0.11:5000,10.1.0.12:5000)
+Annotations:  kubernetes.io/ingress.class: nginx
+              nginx.ingress.kubernetes.io/proxy-body-size: 8m
+              nginx.ingress.kubernetes.io/ssl-redirect: false
+Events:
+  Type    Reason  Age                From                      Message
+  ----    ------  ----               ----                      -------
+  Normal  Sync    20m (x2 over 20m)  nginx-ingress-controller  Scheduled for sync
+```
+
+Now we are able to reach VAmPI running on k8s thru nginx ingress
+
+
+```bash
+curl -v http://localhost:80
+
+* Host localhost:80 was resolved.
+* IPv6: ::1
+* IPv4: 127.0.0.1
+*   Trying [::1]:80...
+* Connected to localhost (::1) port 80
+> GET / HTTP/1.1
+> Host: localhost
+> User-Agent: curl/8.7.1
+> Accept: */*
+> 
+* Request completely sent off
+< HTTP/1.1 200 OK
+< Date: Wed, 22 Oct 2025 02:32:05 GMT
+< Content-Type: application/json
+< Content-Length: 271
+< Connection: keep-alive
+< 
+* Connection #0 to host localhost left intact
+{ "message": "VAmPI the Vulnerable API", "help": "VAmPI is a vulnerable on purpose API. It was created in order to evaluate the efficiency of third party tools in identifying vulnerabilities in APIs but it can also be used in learning/teaching purposes.", "vulnerable":1}
+
+```

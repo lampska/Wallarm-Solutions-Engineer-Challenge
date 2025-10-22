@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vampi-ingress
+  namespace: vampi-app
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    # Optional: enable proxy protocol or client IP preservation if needed
+    nginx.ingress.kubernetes.io/proxy-body-size: "8m"
+    # disable SSL redirect for local HTTP testing
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  
+  ingressClassName: nginx
+  rules:
+    - host: localhost # change to your domain/cname as needed
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: vampi-service
+                port:
+                  number: 80
