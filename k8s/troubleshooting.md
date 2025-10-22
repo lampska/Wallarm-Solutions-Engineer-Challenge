@@ -1,3 +1,4 @@
+# Troubleshooting details
 
 ## Issue #1 - target api pods not running (wrong port)
 
@@ -115,3 +116,94 @@ curl -v http://localhost:80
 { "message": "VAmPI the Vulnerable API", "help": "VAmPI is a vulnerable on purpose API. It was created in order to evaluate the efficiency of third party tools in identifying vulnerabilities in APIs but it can also be used in learning/teaching purposes.", "vulnerable":1}
 
 ```
+
+
+## Issue #2 - namespace error when deploying wallarm ingress object
+
+Accidentally configured vampi-wallarm-ingress-object with namespace vampi. Correct namespace was vampi-app
+
+```bash
+% kubectl apply -f k8s/vampi-wallarm-ingress-object.yaml
+Error from server (NotFound): error when creating "k8s/vampi-wallarm-ingress-object.yaml": namespaces "vampi" not found
+% kubectl get namespaces
+NAME              STATUS   AGE
+default           Active   15h
+ingress-nginx     Active   15h
+kube-node-lease   Active   15h
+kube-public       Active   15h
+kube-system       Active   15h
+vampi-app         Active   14h
+wallarm           Active   41m
+```
+
+Fix 'vampi-wallarm-ingress-forward.yaml'
+
+```
+<  namespace: vampi
+>  namespace: vampi-app
+```
+
+## Issue #3 - nginx to wallarm ingress host/path conflict
+
+Encountered at Step 3 of https://docs.wallarm.com/admin-en/chaining-wallarm-and-other-ingress-controllers/
+
+```bash
+kubectl apply -f k8s/vampi-wallarm-ingress-forward.yaml
+
+Error from server (BadRequest): error when creating "k8s/vampi-wallarm-ingress-forward.yaml": admission webhook "validate.nginx.ingress.kubernetes.io" denied the request: host "localhost" and path "/" is already defined in ingress vampi-app/vampi-ingress
+```
+
+The root cause was that my original vampi-ingress.yaml was still deployed, conflicting with the forwarder ingress.
+
+I basically misread documentation "reconfigure the existing Ingress controller" and created the conflict.
+
+Solution was to remove the original nginx ingress first, then apply k8s/vampi-wallarm-ingress-forward.yaml
+
+```bash
+kubectl delete ingress vampi-ingress -n vampi-app
+kubectl apply -f k8s/vampi-wallarm-ingress-forward.yaml
+```
+
+## Issue #4 - No activity in Wallarm web console after enabling ingress forwarding 
+
+I was following https://docs.wallarm.com/admin-en/chaining-wallarm-and-other-ingress-controllers/ and at Step 4 the suggested /etc/passwd test was not showing in the Console, and I didn't see any Apps/Nodes
+
+First I checked the pod could reach internet
+
+
+### Suspect A -- connectivity
+
+```bash
+# shell into pod
+kubectl exec -it internal-ingress-wallarm-ingress-controller-86f7648cd5-hxvdl -n wallarm -- /bin/bash
+
+# test outgoing (success)
+curl -v https://us1.api.wallarm.com/v1/
+ping us1.api.wallarm.com
+```
+
+### Suspect B -- nginx version
+
+I was using too new nginx ingress version, compared to documentation. Downgraded nginx from 1.13.3 to 1.11.8
+
+```bash
+
+helm list -n ingress-nginx
+NAME         	NAMESPACE    	REVISION	UPDATED                             	STATUS  	CHART               	APP VERSION
+ingress-nginx	ingress-nginx	1       	2025-10-21 19:55:43.318879 -0600 MDT	deployed	ingress-nginx-4.13.3	1.13.3 
+
+helm search repo ingress-nginx/ingress-nginx --versions | grep 1.11.8
+ingress-nginx/ingress-nginx	4.11.8       	1.11.8     	Ingress controller for Kubernetes using NGINX a...
+
+# make sure podSecurityPolicy key is set; my user config was empty so I just added that key
+cat current-values.yaml                                 
+podSecurityPolicy:
+  enabled: false
+
+helm upgrade ingress-nginx ingress-nginx/ingress-nginx \
+  --version 4.11.8 \
+  --namespace ingress-nginx \
+  -f current-values.yaml --debug
+```
+
+## Suspect C - api secret

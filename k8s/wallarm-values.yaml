@@ -1,0 +1,19 @@
+# wallarm ingress controller configuration
+controller:
+  wallarm:
+    apiHost: us1.api.wallarm.com
+    nodeGroup: satest
+    token: ""
+    existingSecret:
+      enabled: true
+      secretKey: token
+      secretName: wallarm-api-token
+  config:
+    use-forwarded-headers: "true"  
+  ingressClass: wallarm-ingress
+  ingressClassResource:
+    name: wallarm-ingress
+    controllerValue: "k8s.io/wallarm-ingress"
+  service:
+    type: ClusterIP
+nameOverride: wallarm-ingress

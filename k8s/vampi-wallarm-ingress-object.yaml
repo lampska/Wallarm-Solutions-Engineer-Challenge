@@ -1,0 +1,24 @@
+# wallarm ingress routing for vampi-service
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/wallarm-application: "1"
+    nginx.ingress.kubernetes.io/wallarm-mode: monitoring
+  name: vampi-internal
+  # must match vampi service namespace
+  namespace: vampi-app
+spec:
+  # must match ingress controller class name at wallarm-values.yaml
+  ingressClassName: wallarm-ingress
+  rules:
+  - host: localhost
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: vampi-service
+            port:
+              number: 80
