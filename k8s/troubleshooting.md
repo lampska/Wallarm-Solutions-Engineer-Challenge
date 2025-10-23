@@ -118,6 +118,7 @@ curl -v http://localhost:80
 ```
 
 
+
 ## Issue #2 - namespace error when deploying wallarm ingress object
 
 Accidentally configured vampi-wallarm-ingress-object with namespace vampi. Correct namespace was vampi-app
@@ -155,7 +156,7 @@ Error from server (BadRequest): error when creating "k8s/vampi-wallarm-ingress-f
 
 The root cause was that my original vampi-ingress.yaml was still deployed, conflicting with the forwarder ingress.
 
-I basically misread documentation "reconfigure the existing Ingress controller" and created the conflict.
+I basically misread documentation "reconfigure the existing Ingress controller" and created the conflict by adding another controller.
 
 Solution was to remove the original nginx ingress first, then apply k8s/vampi-wallarm-ingress-forward.yaml
 
@@ -164,14 +165,13 @@ kubectl delete ingress vampi-ingress -n vampi-app
 kubectl apply -f k8s/vampi-wallarm-ingress-forward.yaml
 ```
 
-## Issue #4 - No activity in Wallarm web console after enabling ingress forwarding 
+## Issue #4 - No activity in Wallarm web console
 
-I was following https://docs.wallarm.com/admin-en/chaining-wallarm-and-other-ingress-controllers/ and at Step 4 the suggested /etc/passwd test was not showing in the Console, and I didn't see any Apps/Nodes
-
-First I checked the pod could reach internet
-
+I was following https://docs.wallarm.com/admin-en/chaining-wallarm-and-other-ingress-controllers/ and, at Step 4, the suggested /etc/passwd test was not showing in the Console. In fact, I didn't see any Apps/Nodes/activity 
 
 ### Suspect A -- connectivity
+
+First I checked the pod could reach internet. It could.
 
 ```bash
 # shell into pod
@@ -184,7 +184,7 @@ ping us1.api.wallarm.com
 
 ### Suspect B -- nginx version
 
-I was using too new nginx ingress version, compared to documentation. Downgraded nginx from 1.13.3 to 1.11.8
+I was using too new nginx ingress version, compared to documentation. Downgraded nginx from 1.13.3 to 1.11.8 & redeploy This didn't resolve the issue.
 
 ```bash
 
@@ -206,4 +206,33 @@ helm upgrade ingress-nginx ingress-nginx/ingress-nginx \
   -f current-values.yaml --debug
 ```
 
-## Suspect C - api secret
+### Suspect C -- Mac M3 (ARM)
+
+I quickly retraced all the deployment steps on my Windows 11 Ubuntu 24.04 WSL (Intel). This time I used nginx 1.11.8 from the beginning. This didn't resolve the issue.
+
+### Suspect D -- wallarm ingress controller helm user values
+
+My ingress controller user values were missing controller.wallarm.enabled key. Somehow I had overlooked it (not my proudest moment).
+
+```yaml
+controller:
+  wallarm:
+    apiHost: us1.api.wallarm.com
+    nodeGroup: satest
+    token: ""
+    existingSecret:
+      enabled: true
+      secretKey: token
+      secretName: wallarm-api-token
+  config:
+    use-forwarded-headers: "true"
+  ingressClass: wallarm-ingress
+  ingressClassResource:
+    name: wallarm-ingress
+    controllerValue: "k8s.io/wallarm-ingress"
+  service:
+    type: ClusterIP
+nameOverride: wallarm-ingress
+```
+
+Adding controller.wallarm.enabled: true resolved the issue.

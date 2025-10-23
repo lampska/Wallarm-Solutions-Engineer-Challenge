@@ -23,6 +23,6 @@ spec:
             backend:
               service:
                 # must match wallarm ingress controller name installed via helm
-                name: internal-ingress-wallarm-ingress-controller
+                name: wallarm-controller-wallarm-ingress-controller
                 port:
                   number: 80

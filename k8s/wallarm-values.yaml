@@ -1,6 +1,7 @@
 # wallarm ingress controller configuration
 controller:
   wallarm:
+    enabled: true
     apiHost: us1.api.wallarm.com
     nodeGroup: satest
     token: ""
