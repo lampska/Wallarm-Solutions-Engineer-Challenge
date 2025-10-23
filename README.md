@@ -4,28 +4,31 @@ This README documents the steps taken to complete Wallarm technical solution arc
 
 # Summary
 
-## Local environment setup
+## High level walkthrough
 
-- Kubernetes, helm, nginx ingress controller
-- Backend vulnerable API https://github.com/erev0s/VAmPI
-- Wallarm k8s nginx ingress controller chainer deployment
-- GoTestWaf deployed and run as docker container
-- TLS not setup
+- Local environment setup: Docker, Kubernetes, helm, nginx ingress controller (TLS not setup)
+- Target API: https://github.com/erev0s/VAmPI
+- Wallarm Deployment: Kubernetes nginx ingress controller chainer
+- GoTestWaf docker runs; Wallarm in monitor and in block mode
+
+## Test Result
+
+When Wallarm mode was changed from monitor to block mode, GotTestWaf reported increased efficay from grade D- to A+
 
 ## Files & Folders
 
 - `troubleshooting.md` - Troubleshooting details of encountered issues
-- `k8s/vampi-namespace.yaml` - k8s namespace for the app (`vampi-app`)
+- `k8s/vampi-namespace.yaml` - k8s namespace for the VAmPI app (`vampi-app`)
 - `k8s/vampi-deployment.yaml` - k8s deployment for the VAmPI container
-- `k8s/vampi-service.yaml` - k8s clusterIP Service exposing the pod port
-- `k8s/vampi-ingress.yaml` - k8s nginx ingress resource
+- `k8s/vampi-service.yaml` - k8s clusterIP Service exposing the VAmPI pod port
+- `k8s/vampi-ingress.yaml` - k8s nginx ingress resource routing to VAmPI service
 - `k8s/wallarm-values.yaml` - wallarm ingress controller helm deployment user values
 - `k8s/vampi-wallarm-ingress-object.yaml` - wallarm ingress chainer / service facing
 - `k8s/vampi-wallarm-ingress-forward.yaml` - Wallarm ingress chainer / vampi-ingress.yaml replacement
-- `screenshots/` - screenshots 
+- `screenshots/` - screenshots used in this README
 - `gotestwaf/` - GoTestWaf reports, openapi spec
 
-## Deployment mermaid diagram
+## Deployment diagram
 
 ```mermaid
 graph LR
@@ -147,7 +150,7 @@ kube-system   replicaset.apps/coredns-66bc5c9577   2         2         2       1
 
 Second setup (Intel based)
 - Ubuntu 24.04 WSL (Windows Subsystem for Linux)
-- k3s kubernetes
+- k3s kubernetes (was running traefik and replaced it with nginx-ingress)
 - helm
 - docker
 
@@ -164,7 +167,7 @@ helm repo update
 helm install ingress-nginx ingress-nginx/ingress-nginx --version 4.11.8 --namespace ingress-nginx --create-namespace
 ```
 
-Verification -- please note nginx 404 error code is expected at this phase as there are no backend apps/apis running & routes yet. We are simply verifying the ingress is up and working.
+Verification -- please note curl nginx 404 error code is expected at this phase, as there are no backend apps/apis running & routes yet. We are simply verifying the ingress is up and working.
 
 ```bash
 kubectl get service --namespace ingress-nginx
@@ -202,7 +205,7 @@ curl -v http://localhost:80
 
 ## Deploy target API app (VAmPI) and ingress routing to k8s
 
-Target practice api/app is https://github.com/erev0s/VAmPI. VAmPI is intentionally vulnerable ala WebGoat, and it is meant for vulnerability scanning and security control efficay testing. It also comes with OpenAPI spec. For plain docker instructions, please refer to the VAmPI Github readme.
+Target practice api/app is https://github.com/erev0s/VAmPI. VAmPI is a vulnerable API made with Python Flask and it includes vulnerabilities from the OWASP API top 10.
 
 Steps:
 - Create k8s namespace vampi-app.
@@ -260,7 +263,7 @@ Events:
   Normal  Sync    20m (x2 over 20m)  nginx-ingress-controller  Scheduled for sync
 ```
 
-Now we are able to reach VAmPI running on k8s thru nginx ingress.
+Verify with curl VAmPI can be reached thru k8s nginx ingress.
 
 ```bash
 curl -v http://localhost:80
@@ -287,7 +290,7 @@ curl -v http://localhost:80
 
 ```
 
-Environment is now ready for Wallarm deployment and testing
+Environment is now fully functional and ready for Wallarm deployment and testing.
 
 ## Wallarm deployment
 
@@ -311,38 +314,38 @@ Relevant documentation
 
 ### Wallarm API token
 
-Login and create a "node deployment token" at https://us1.my.wallarm.com/settings/api-tokens. Save the token securely.
+Login and create a "node deployment token" at https://us1.my.wallarm.com/settings/api-tokens. 
 
 ![Wallarm api token](screenshots/wallarm-api-token.png "Wallarm api token")
 
 ### Wallarm k8s namespace, secret, nginx controller
 
-1. Create Wallarm namespace.
+Create Wallarm namespace.
 
 ```bash
 kubectl create namespace wallarm
 ```
 
-1. Create Wallarm token secret 'wallarm-api-token' (replace WALLARM_NODE_TOKEN with the actual token) 
+Create Wallarm token secret `wallarm-api-token` (replace `WALLARM_NODE_TOKEN` with the actual token) 
 
 ```bash
 kubectl -n wallarm create secret generic wallarm-api-token --from-literal=token=<WALLARM_NODE_TOKEN>
 ```
 
-1. Add Wallarm helm charts repo
+Add Wallarm helm charts repo
 
 ```bash
 helm repo add wallarm https://charts.wallarm.com
 helm repo update
 ```
 
-1. Configure k8s/wallarm-values.yaml and install to wallarm namespace
+Configure k8s/wallarm-values.yaml and install to wallarm namespace
 
 ```bash
 helm install --version 6.6.2 wallarm-controller wallarm/wallarm-ingress -n wallarm -f k8s/wallarm-values.yaml
 ```
 
-Verification (after fixing issue #4)
+Verification (after fixing issue #4 - encountered later)
 
 ```bash
 ubectl get all -n wallarm
@@ -366,19 +369,9 @@ replicaset.apps/wallarm-controller-wallarm-ingress-controller-wallarm-wstore-546
 
 ### Routing traffic via wallarm nginx ingress
 
-This step enables wallarm in-line monitoring and blocking. The ingress routing is modified from
+This step enables wallarm in-line monitoring and blocking. The ingress routing is modified from `nginx-ingress -> vampi-service` to `nginx-ingress (modified) -> wallarm-ingress -> vampi-service`
 
-```
-nginx-ingress -> vampi-service
-```
-
-to
-
-```
-nginx-ingress (modified) -> wallarm-ingress -> vampi-service
-```
-
-1. Configure and deploy k8s/vampi-wallarm-ingress-object.yaml
+Configure and deploy `k8s/vampi-wallarm-ingress-object.yaml`
 
 ```bash
 kubectl apply -f k8s/vampi-wallarm-ingress-object.yaml
@@ -386,17 +379,17 @@ kubectl apply -f k8s/vampi-wallarm-ingress-object.yaml
 
 (NOTE: Issue #2 namespace bug in troubleshooting.md)
 
-1. Get the wallarm controller service name (internal-ingress-wallarm-ingress-controller)
+Get the wallarm controller service name (`wallarm-controller-wallarm-ingress-controller`)
 
 ```bash
 kubectl get svc -l "app.kubernetes.io/component=controller" -n wallarm -o=jsonpath='{.items[0].metadata.name}'
 ```
 
-1. Configure 'k8s/vampi-wallarm-ingress-forward.yaml' 
+Configure `k8s/vampi-wallarm-ingress-forward.yaml`
 
-Notably, make sure in 'k8s/vampi-wallarm-ingress-object.yaml'
-- 'spec.ingressClassName' must match the ingressClassName in 'k8s/vampi-ingress.yaml'
-- 'spec.rules[0].http.paths[0].backend.service.name' must match the wallarm controller service name
+Notably, make sure that in `k8s/vampi-wallarm-ingress-object.yaml`
+- `spec.ingressClassName` matches the ingressClassName in `k8s/vampi-ingress.yaml`
+- `spec.rules[0].http.paths[0].backend.service.name` matches the wallarm controller service name `wallarm-controller-wallarm-ingress-controller`
 
 ```yaml
 spec:
@@ -416,19 +409,19 @@ spec:
                   number: 80
 ```
 
-1. Delete the original nginx-ingress (NOTE Issue #3 in troubleshooting.md)
+Delete the original nginx-ingress (NOTE Issue #3 in troubleshooting.md)
 
 ```
 kubectl delete ingress vampi-ingress -n vampi-app
 ```
 
-1. Deploy modified nginx-ingress
+Deploy modified nginx-ingress
 
 ```bash
 kubectl apply -f k8s/vampi-wallarm-ingress-forward.yaml
 ```
 
-### Verifying Wallarm connectivity
+### Verify Wallarm cloud connectivity
 
 See Issue #4 in troubleshooting.md (embarrassing). After fixing it...
 
@@ -462,7 +455,6 @@ kubectl annotate ingress vampi-internal -n vampi-app nginx.ingress.kubernetes.io
 
 # Run 2 with block mode
 docker run --rm --network="host" -it -v "${PWD}"/reports:/app/reports -v "${PWD}"/openapi3.yml:/app/openapi3.yml wallarm/gotestwaf --wafName Wallarm_block --url=http://localhost:80 --openapiFile openapi3.yml --skipWAFBlockCheck --skipWAFIdentification --reportName vampi-wallarm-block --reportFormat html
-
 ```
 
 ### Result - Wallarm in monitor mode
@@ -472,3 +464,11 @@ docker run --rm --network="host" -it -v "${PWD}"/reports:/app/reports -v "${PWD}
 ### Result - Wallarm in block mode
 
 ![Block node](screenshots/gotestwaf-block.png "Block mode")
+
+### Todo - authenticated test
+
+Todo: registered user jwt token, pass it to gotestwaf and run authenticated
+
+### Wallarm dashboard after testing
+
+![Dashboard](screenshots/wallarm-gotestwaf-dashboard.png "Dashboard")
